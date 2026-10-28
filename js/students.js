@@ -307,12 +307,12 @@ const StudentsModule = {
     const modalBody = document.getElementById('profile-modal-body');
 
     modalBody.innerHTML = `
-      <div style="display: flex; gap: 20px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 20px;">
+      <div class="student-profile-header-card">
         <div class="student-avatar" style="width: 64px; height: 64px; font-size: 1.5rem;">
           ${student.name.charAt(0).toUpperCase()}
         </div>
         <div style="flex: 1;">
-          <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <h2 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main);">${student.name}</h2>
             <span class="badge ${student.status === 'active' ? 'badge-success' : student.status === 'completed' ? 'badge-primary' : 'badge-neutral'}">
               ${student.status}
@@ -321,13 +321,13 @@ const StudentsModule = {
           <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 3px;">
             Father: <strong>${student.fatherName || 'N/A'}</strong> | Roll No: <strong>#${student.rollNo}</strong> | Reg ID: <strong>${student.id}</strong>
           </div>
-          <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.82rem;">
+          <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.82rem; flex-wrap: wrap;">
             <span><i class="fas fa-phone-alt"></i> ${student.phone}</span>
             <span><i class="fas fa-id-card"></i> ${student.cnic || 'N/A'}</span>
             <span><i class="fas fa-clock"></i> ${student.shift}</span>
           </div>
         </div>
-        <div>
+        <div class="profile-header-actions">
           ${student.phone ? `
             <a href="https://wa.me/${student.phone.replace(/[^0-9]/g, '')}?text=Dear%20${encodeURIComponent(student.name)},%20Greetings%20from%20Zonish%20Computer%20Academy." 
                target="_blank" class="btn btn-sm btn-outline" style="color: #25D366; border-color: #25D366;">
@@ -341,11 +341,11 @@ const StudentsModule = {
       </div>
 
       <!-- Quick Status Toggle -->
-      <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--border); margin-bottom: 20px;">
+      <div class="student-status-toggle-bar">
         <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">
           Academic Status:
         </span>
-        <div style="display: flex; gap: 8px;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-sm ${student.status === 'active' ? 'btn-success' : 'btn-outline'}" 
                   onclick="StudentsModule.updateStatus('${student.id}', 'active')">
             <i class="fas fa-book-reader"></i> Studying (Active)
@@ -362,7 +362,7 @@ const StudentsModule = {
       </div>
 
       <!-- Course & Fee Clearance Summary -->
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px;">
+      <div class="student-profile-stats-grid">
         <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px;">
           <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Enrolled Course</div>
           <div style="font-size: 1.05rem; font-weight: 800; color: var(--primary); margin-top: 4px;">${student.courseCode}</div>

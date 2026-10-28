@@ -73,7 +73,7 @@ const FirebaseSync = {
       }
 
       this.db = firebase.firestore();
-      
+
       // Save valid config
       this.saveConfig(config);
 
@@ -213,7 +213,7 @@ const FirebaseSync = {
     if (!badge) return;
 
     badge.className = 'cloud-badge';
-    
+
     if (status === 'online') {
       badge.classList.add('cloud-online');
       badge.innerHTML = `<span class="dot green"></span> <i class="fas fa-cloud"></i> <span>${text}</span>`;

@@ -32,22 +32,62 @@ const App = {
         e.preventDefault();
         const targetTab = item.getAttribute('data-tab');
         this.switchTab(targetTab);
+        this.closeMobileSidebar();
       });
     });
 
-    // Mobile sidebar toggle if present
+    // Mobile sidebar toggle & overlay handling
     const toggleBtn = document.getElementById('mobile-sidebar-toggle');
+    const closeBtn = document.getElementById('sidebar-close-btn');
+    const overlay = document.getElementById('sidebar-overlay');
     const sidebar = document.querySelector('.sidebar');
+
     if (toggleBtn && sidebar) {
       toggleBtn.addEventListener('click', () => {
-        sidebar.classList.toggle('mobile-open');
+        const isOpen = sidebar.classList.toggle('mobile-open');
+        if (overlay) overlay.classList.toggle('active', isOpen);
       });
     }
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        this.closeMobileSidebar();
+      });
+    }
+
+    if (overlay) {
+      overlay.addEventListener('click', () => {
+        this.closeMobileSidebar();
+      });
+    }
+
+    // Close on Escape key
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.closeMobileSidebar();
+      }
+    });
+
+    // Auto-close when window expands past mobile breakpoint
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 992) {
+        this.closeMobileSidebar();
+      }
+    });
+  },
+
+  closeMobileSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) sidebar.classList.remove('mobile-open');
+    if (overlay) overlay.classList.remove('active');
   },
 
   switchTab(tabId) {
     if (!tabId) return;
     this.activeTab = tabId;
+    this.closeMobileSidebar();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     // Update nav classes
     document.querySelectorAll('.nav-item').forEach(el => {
@@ -806,7 +846,7 @@ const App = {
         </div>
 
         <!-- Cumulative Partner Payout Cards -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
+        <div class="partner-payout-cards">
           <div style="background: #ecfdf5; border: 2px solid #6ee7b7; border-radius: 10px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;">
             <div>
               <div style="font-size: 0.75rem; color: #065f46; font-weight: 700; text-transform: uppercase;">
@@ -868,7 +908,7 @@ const App = {
         </div>
 
         <!-- Official Signatures Box for Print Verification -->
-        <div style="margin-top: 26px; border-top: 2px dashed #cbd5e1; padding-top: 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; text-align: center; font-size: 0.82rem;">
+        <div class="statement-signatures-grid">
           <div>
             <div style="height: 32px;"></div>
             <div style="border-top: 1px solid #64748b; padding-top: 4px; font-weight: 600;">Teacher Signature</div>

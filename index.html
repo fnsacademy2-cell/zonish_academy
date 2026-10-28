@@ -37,6 +37,9 @@
           <h2>ZONISH ACADEMY</h2>
           <p>Admission & Fees Portal</p>
         </div>
+        <button id="sidebar-close-btn" class="icon-btn mobile-close-btn" title="Close Menu">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
 
       <nav class="sidebar-nav">
@@ -76,13 +79,16 @@
       </div>
     </aside>
 
+    <!-- Mobile Sidebar Backdrop Overlay -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
     <!-- Main Application Wrapper -->
     <main class="main-wrapper">
       
       <!-- Sticky Top Navigation Bar -->
       <header class="top-navbar">
-        <div style="display: flex; align-items: center; gap: 14px;">
-          <button id="mobile-sidebar-toggle" class="icon-btn" style="display: none;" title="Toggle Sidebar">
+        <div class="topbar-left">
+          <button id="mobile-sidebar-toggle" class="icon-btn" title="Toggle Sidebar">
             <i class="fas fa-bars"></i>
           </button>
           <div class="page-title">
@@ -97,14 +103,14 @@
             <span class="dot gray"></span> <i class="fas fa-hdd"></i> <span>Local Mode</span>
           </div>
 
-          <button class="btn btn-outline btn-sm" onclick="ExpensesModule.openAddModal()">
-            <i class="fas fa-minus-circle" style="color: var(--danger);"></i> Add Expense
+          <button class="btn btn-outline btn-sm action-btn-expense" onclick="ExpensesModule.openAddModal()" title="Add Academy Expense">
+            <i class="fas fa-minus-circle" style="color: var(--danger);"></i> <span class="btn-text">Add Expense</span>
           </button>
-          <button class="btn btn-success btn-sm" onclick="FeesModule.openCollectModal()">
-            <i class="fas fa-money-bill-wave"></i> Collect Monthly Fee
+          <button class="btn btn-success btn-sm action-btn-fee" onclick="FeesModule.openCollectModal()" title="Collect Monthly Fee">
+            <i class="fas fa-money-bill-wave"></i> <span class="btn-text">Collect Fee</span>
           </button>
-          <button class="btn btn-primary btn-sm" onclick="StudentsModule.openAdmissionModal()">
-            <i class="fas fa-user-plus"></i> New Admission
+          <button class="btn btn-primary btn-sm action-btn-admission" onclick="StudentsModule.openAdmissionModal()" title="New Student Admission">
+            <i class="fas fa-user-plus"></i> <span class="btn-text">New Admission</span>
           </button>
         </div>
       </header>
@@ -247,7 +253,7 @@
           </div>
 
           <!-- Secondary Grid: Defaulters Alert & Quick Summary -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+          <div class="dashboard-secondary-grid">
             
             <!-- Quick Defaulters Widget -->
             <div class="panel-card">
@@ -419,7 +425,7 @@
             </div>
 
             <!-- Month Collection Stats Bar -->
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px; margin-bottom: 18px;">
+            <div class="fee-month-stats-grid">
               <div>
                 <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Expected This Month</div>
                 <div style="font-size: 1.3rem; font-weight: 800; color: var(--text-main); margin-top: 4px;" id="fee-stat-expected">Rs. 0</div>
@@ -537,7 +543,7 @@
         <section id="tab-expenses" class="tab-content" style="display: none;">
           
           <!-- Expense Stats -->
-          <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 24px;">
+          <div class="metrics-grid expenses-metrics-grid">
             <div class="metric-card card-danger">
               <div>
                 <div class="metric-title">This Month's Expenses</div>
@@ -710,7 +716,7 @@
               Connect your Google Firebase Firestore database to access, view, and update student records, monthly fees, and expenses live from your home laptop, mobile phone, or branch computer.
             </p>
 
-            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px;">
+            <div class="firebase-settings-grid">
               <!-- Form -->
               <div>
                 <form id="firebase-config-form">
@@ -723,7 +729,7 @@
 
                     <div style="text-align: center; font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">— OR FILL INDIVIDUAL FIELDS —</div>
 
-                    <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-grid fb-fields-grid">
                       <div class="form-group">
                         <label>API Key <span class="required">*</span></label>
                         <input type="text" id="fb-apiKey" class="form-control" placeholder="AIzaSy...">
@@ -1140,7 +1146,7 @@
             </div>
 
             <!-- Percentage Inputs -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px;">
+            <div class="split-partner-grid" style="margin-top: 8px;">
               <div class="form-group">
                 <label style="color: #065f46; font-weight: 700; font-size: 0.82rem;">
                   <i class="fas fa-chalkboard-teacher"></i> Teacher Percentage (%)
@@ -1156,7 +1162,7 @@
             </div>
 
             <!-- Live Preview Distribution Cards -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+            <div class="split-partner-grid" style="margin-top: 12px;">
               <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 12px; text-align: center;">
                 <div style="font-size: 0.75rem; color: #065f46; font-weight: 700; text-transform: uppercase;">
                   <i class="fas fa-chalkboard-teacher"></i> Teacher Share
