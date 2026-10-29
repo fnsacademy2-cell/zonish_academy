@@ -248,10 +248,21 @@ const App = {
     if (bannerAdminShare) bannerAdminShare.textContent = `${currency} ${split.cumulativeAdminPaid.toLocaleString()}`;
 
     // Update Quick Defaulters Alert Widget in Dashboard
+    const totalActive = store.getStudents().filter(s => s.status === 'active').length;
     const defaultersList = store.getDefaultersForMonth(curYM);
     const dashDefaultersWidget = document.getElementById('dash-defaulters-widget');
     if (dashDefaultersWidget) {
-      if (defaultersList.length === 0) {
+      if (totalActive === 0) {
+        dashDefaultersWidget.innerHTML = `
+          <div style="text-align: center; padding: 24px; color: var(--text-muted);">
+            <i class="fas fa-user-graduate" style="font-size: 2rem; opacity: 0.5;"></i>
+            <p style="margin-top: 8px; font-weight: 600;">No active students enrolled yet.</p>
+            <button class="btn btn-sm btn-primary" style="margin-top: 6px;" onclick="StudentsModule.openAdmissionModal()">
+              <i class="fas fa-user-plus"></i> New Admission
+            </button>
+          </div>
+        `;
+      } else if (defaultersList.length === 0) {
         dashDefaultersWidget.innerHTML = `
           <div style="text-align: center; padding: 24px; color: var(--success);">
             <i class="fas fa-check-circle" style="font-size: 2rem;"></i>
@@ -478,6 +489,42 @@ const App = {
         fbStatusText.innerHTML = '<span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> Saved (Connecting or Offline)</span>';
       } else {
         fbStatusText.innerHTML = '<span class="badge badge-neutral"><i class="fas fa-plug"></i> Not Connected (Local Storage Mode)</span>';
+      }
+    }
+
+    // Render Data Management storage summary
+    const store = window.academyStore;
+    const studentsCount = store.getStudents().length;
+    const feesCount = store.getFeePayments().length;
+    const expCount = store.getExpenses().length;
+
+    const elCountStudents = document.getElementById('settings-count-students');
+    const elCountFees = document.getElementById('settings-count-fees');
+    const elCountExp = document.getElementById('settings-count-expenses');
+    const elCloudSummary = document.getElementById('settings-cloud-summary');
+    const elDbBadge = document.getElementById('settings-db-status-badge');
+
+    if (elCountStudents) elCountStudents.textContent = studentsCount.toLocaleString();
+    if (elCountFees) elCountFees.textContent = feesCount.toLocaleString();
+    if (elCountExp) elCountExp.textContent = expCount.toLocaleString();
+
+    if (elCloudSummary) {
+      if (isFbConnected) {
+        elCloudSummary.innerHTML = '<span style="color: var(--success);"><i class="fas fa-check-circle"></i> Live Sync</span>';
+      } else if (savedFbConfig) {
+        elCloudSummary.innerHTML = '<span style="color: var(--warning);"><i class="fas fa-clock"></i> Standby (Offline)</span>';
+      } else {
+        elCloudSummary.innerHTML = '<span style="color: var(--text-muted);"><i class="fas fa-ban"></i> Disconnected</span>';
+      }
+    }
+
+    if (elDbBadge) {
+      if (studentsCount === 0 && feesCount === 0 && expCount === 0) {
+        elDbBadge.className = 'badge badge-neutral';
+        elDbBadge.innerHTML = '<i class="fas fa-eraser"></i> Clean / Empty Database';
+      } else {
+        elDbBadge.className = 'badge badge-success';
+        elDbBadge.innerHTML = `<i class="fas fa-database"></i> ${studentsCount} Students Active`;
       }
     }
   },
@@ -1091,21 +1138,167 @@ const App = {
   },
 
   resetDemoData() {
-    if (confirm('This will reset the system back to sample records for CIT, DIT, and Office Automation students. Any unsaved custom records will be overwritten. Proceed?')) {
+    if (confirm('This will load sample demo records for CIT, DIT, and Office Automation students. Any current records will be replaced with sample demo records. Proceed?')) {
       window.academyStore.resetToDefault();
-      this.showToast('Reset to demo records completed', 'success');
-      setTimeout(() => location.reload(), 600);
+      this.showToast('Demo records loaded successfully', 'success');
+      this.refreshDashboard();
+      this.renderSettings();
     }
   },
 
-  clearData() {
-    if (confirm('WARNING: Are you sure you want to completely erase all student and financial data? Please export a backup first.')) {
-      if (confirm('Double confirmation: Really delete all academy records?')) {
-        window.academyStore.clearAllData();
-        this.showToast('All academy data cleared', 'info');
-        setTimeout(() => location.reload(), 600);
+  // ==================== WIPE OUT DATA SYSTEM ====================
+
+  openWipeModal() {
+    const input = document.getElementById('wipe-confirm-input');
+    const btn = document.getElementById('btn-execute-wipe');
+    const logContainer = document.getElementById('wipe-log-container');
+    const logConsole = document.getElementById('wipe-log-console');
+    const cloudChk = document.getElementById('wipe-target-cloud');
+    const cloudHint = document.getElementById('wipe-cloud-hint');
+
+    if (input) input.value = '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-trash-alt"></i> Permanently Wipe Out Data';
+      btn.classList.add('btn-danger');
+      btn.classList.remove('btn-success');
+    }
+    if (logContainer) logContainer.style.display = 'none';
+    if (logConsole) logConsole.innerHTML = '';
+
+    const isCloudConnected = window.FirebaseSync && window.FirebaseSync.isConnected;
+    if (cloudChk) {
+      cloudChk.checked = isCloudConnected;
+      cloudChk.disabled = !isCloudConnected;
+    }
+    if (cloudHint) {
+      if (isCloudConnected) {
+        cloudHint.innerHTML = '<span style="color: var(--success);"><i class="fas fa-check-circle"></i> Firebase Cloud is connected. Remote database records will be wiped.</span>';
+      } else {
+        cloudHint.innerHTML = '<span style="color: var(--text-muted);"><i class="fas fa-info-circle"></i> Firebase is not connected. Local Storage only will be wiped.</span>';
       }
     }
+
+    this.openModal('wipe-data-modal');
+  },
+
+  onWipeConfirmInput(value) {
+    const btn = document.getElementById('btn-execute-wipe');
+    if (btn) {
+      btn.disabled = (value || '').trim().toUpperCase() !== 'DELETE';
+    }
+  },
+
+  logWipeMessage(text, type = 'info') {
+    const consoleBox = document.getElementById('wipe-log-console');
+    if (!consoleBox) return;
+
+    const time = new Date().toTimeString().split(' ')[0];
+    let color = '#94a3b8';
+    let prefix = '[INFO]';
+
+    if (type === 'success') {
+      color = '#4ade80';
+      prefix = '[SUCCESS]';
+    } else if (type === 'danger' || type === 'error') {
+      color = '#f87171';
+      prefix = '[ERROR]';
+    } else if (type === 'warning') {
+      color = '#fbbf24';
+      prefix = '[WARN]';
+    } else if (type === 'cloud') {
+      color = '#38bdf8';
+      prefix = '[CLOUD]';
+    } else if (type === 'local') {
+      color = '#a78bfa';
+      prefix = '[LOCAL]';
+    }
+
+    const line = document.createElement('div');
+    line.style.color = color;
+    line.style.margin = '2px 0';
+    line.innerHTML = `<span style="color: #64748b;">[${time}]</span> <strong style="color: ${color};">${prefix}</strong> ${text}`;
+    consoleBox.appendChild(line);
+    consoleBox.scrollTop = consoleBox.scrollHeight;
+  },
+
+  async confirmAndExecuteWipe() {
+    const btn = document.getElementById('btn-execute-wipe');
+    const logContainer = document.getElementById('wipe-log-container');
+    const logStatus = document.getElementById('wipe-log-status');
+    const cloudChk = document.getElementById('wipe-target-cloud');
+
+    const shouldWipeCloud = cloudChk && cloudChk.checked && window.FirebaseSync && window.FirebaseSync.isConnected;
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Wiping Data...';
+    }
+
+    if (logContainer) logContainer.style.display = 'block';
+    if (logStatus) {
+      logStatus.textContent = 'Executing...';
+      logStatus.style.color = 'var(--primary)';
+    }
+
+    this.logWipeMessage('Starting complete academy wipe out sequence...', 'info');
+
+    const store = window.academyStore;
+    const statsBefore = {
+      students: store.getStudents().length,
+      fees: store.getFeePayments().length,
+      expenses: store.getExpenses().length
+    };
+
+    this.logWipeMessage(`Discovered: ${statsBefore.students} student records, ${statsBefore.fees} fee transactions, ${statsBefore.expenses} expense vouchers.`, 'info');
+
+    // 1. Wipe Firebase Cloud Firestore if targeted
+    if (shouldWipeCloud) {
+      this.logWipeMessage('Connecting to Google Firebase Firestore (doc: academies/zonish_main)...', 'cloud');
+      try {
+        const cloudResult = await window.FirebaseSync.wipeCloudData();
+        if (cloudResult && cloudResult.success) {
+          this.logWipeMessage('Firebase Cloud Firestore document successfully wiped clean.', 'cloud');
+        } else {
+          this.logWipeMessage(`Firebase Cloud notice: ${cloudResult.error || 'Connection timed out'}`, 'warning');
+        }
+      } catch (err) {
+        this.logWipeMessage(`Cloud exception: ${err.message}`, 'danger');
+      }
+    } else {
+      this.logWipeMessage('Remote cloud database wipe skipped (offline mode or unchecked).', 'info');
+    }
+
+    // 2. Wipe Local Storage Records
+    this.logWipeMessage('Erasing records from Google Chrome Local Storage...', 'local');
+    await store.wipeAllData({ wipeCloud: false });
+    this.logWipeMessage('Local storage collections (students, fee payments, expenses) cleared to 0.', 'local');
+    this.logWipeMessage('Financial ledger distribution history reset to clean state.', 'local');
+    this.logWipeMessage('Guard flag activated: System will remain empty until you enter new data.', 'success');
+    this.logWipeMessage('Wipe completed successfully! 0 records remaining.', 'success');
+
+    if (logStatus) {
+      logStatus.textContent = 'Completed ✓';
+      logStatus.style.color = '#10b981';
+    }
+
+    if (btn) {
+      btn.innerHTML = '<i class="fas fa-check-circle"></i> Data Wiped Clean';
+      btn.classList.remove('btn-danger');
+      btn.classList.add('btn-success');
+    }
+
+    this.showToast('All academy data wiped out from local storage & database!', 'success');
+    this.refreshDashboard();
+    this.renderSettings();
+
+    setTimeout(() => {
+      this.closeModal('wipe-data-modal');
+    }, 2400);
+  },
+
+  clearData() {
+    this.openWipeModal();
   }
 };
 

@@ -91,7 +91,7 @@ const FirebaseSync = {
       // If cloud document has data, prompt or sync; otherwise upload local data
       if (docSnap.exists) {
         const cloudData = docSnap.data();
-        if (cloudData && cloudData.students) {
+        if (cloudData) {
           console.log('Found remote cloud data in Firebase. Merging...');
           window.academyStore.applyCloudState(cloudData);
         }
@@ -133,7 +133,7 @@ const FirebaseSync = {
 
         if (snapshot.exists) {
           const remoteData = snapshot.data();
-          if (remoteData && remoteData.students) {
+          if (remoteData) {
             console.log('Realtime update received from remote location.');
             window.academyStore.applyCloudState(remoteData, true);
           }
@@ -160,6 +160,7 @@ const FirebaseSync = {
         students: stateData.students || [],
         feePayments: stateData.feePayments || [],
         expenses: stateData.expenses || [],
+        profitSplit: stateData.profitSplit || null,
         lastUpdated: new Date().toISOString(),
         updatedByLocation: window.navigator.userAgent || 'Remote User'
       };
@@ -179,6 +180,42 @@ const FirebaseSync = {
       if (showFeedback && window.App) {
         window.App.showToast(`Cloud Sync Error: ${err.message}`, 'danger');
       }
+    }
+  },
+
+  // Completely wipe records on Google Firebase Cloud database
+  async wipeCloudData() {
+    if (!this.isConnected || !this.db) {
+      return { success: false, reason: 'not_connected' };
+    }
+
+    try {
+      this.isSyncing = true;
+      this.updateCloudStatusBadge('syncing', 'Wiping Cloud Database...');
+
+      const emptyPayload = {
+        academyInfo: window.academyStore.getAcademyInfo(),
+        courses: window.academyStore.getCourses(),
+        students: [],
+        feePayments: [],
+        expenses: [],
+        profitSplit: window.academyStore.getDefaultProfitSplit(),
+        lastUpdated: new Date().toISOString(),
+        updatedByLocation: window.navigator.userAgent || 'Remote User',
+        isWipedClean: true
+      };
+
+      // Overwrite the Firestore document with empty clean arrays (merge: false)
+      await this.db.doc(this.docPath).set(emptyPayload, { merge: false });
+
+      this.isSyncing = false;
+      this.updateCloudStatusBadge('online', 'Cloud Database Wiped Clean');
+      return { success: true };
+    } catch (err) {
+      this.isSyncing = false;
+      this.updateCloudStatusBadge('error', 'Cloud Wipe Failed');
+      console.error('Error wiping Firebase cloud data:', err);
+      return { success: false, error: err.message };
     }
   },
 

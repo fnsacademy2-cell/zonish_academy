@@ -73,9 +73,14 @@ A complete, modern, standalone Google Chrome / web-based Academy Management Syst
   4. Click **Connect & Start Live Sync**!
 - **Dual Offline/Online Architecture**: The app continues to work smoothly offline using local storage, and automatically syncs all updates once reconnected.
 
-### 6. Offline Data Storage & Backup
+### 6. Data Storage, Wipe Out & Backup
 - Powered by Google Chrome's local storage engine (no internet required for data operations).
-- **Download Full Backup (.JSON)**: Save a backup file to your computer anytime.
+- **Permanent Data Wipe Out (Local & Cloud Database)**:
+  - 1-click Wipe Out with confirmation security safeguard (typing `DELETE`).
+  - Clears all student records, fee vouchers, expenses, and ledger profit splits from both Local Storage and Google Firebase Cloud database.
+  - **Zero Residual Demo Data**: Once wiped, the system remains completely empty (0 records) across all refreshes and will **never show sample data again until new data is entered**.
+  - Live execution log console displays step-by-step progress during the wipe operation.
+- **Download Full Backup (.JSON)**: Save a complete backup file to your computer anytime.
 - **Restore from Backup**: Upload your JSON backup to restore all data instantly.
 - **Export to CSV / Excel**: Export student directories, fee payment transactions, and expenses.
 

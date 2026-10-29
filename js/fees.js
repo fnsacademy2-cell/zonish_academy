@@ -190,7 +190,21 @@ const FeesModule = {
 
     const store = window.academyStore;
     const currency = store.getAcademyInfo().currency;
+    const activeStudents = store.getStudents().filter(s => s.status === 'active');
     const defaulters = store.getDefaultersForMonth(this.selectedYearMonth);
+
+    if (activeStudents.length === 0) {
+      container.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 36px 20px; color: var(--text-muted);">
+            <div style="font-size: 2rem; margin-bottom: 8px;">🎓</div>
+            <strong>No active students registered yet.</strong>
+            <p style="font-size: 0.8rem; margin-top: 4px;">Click "Students & Records" to admit your first student.</p>
+          </td>
+        </tr>
+      `;
+      return;
+    }
 
     if (defaulters.length === 0) {
       container.innerHTML = `

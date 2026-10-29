@@ -5,13 +5,82 @@
  */
 
 const STORAGE_KEY = 'zonish_academy_db_v2';
+const WIPED_FLAG_KEY = 'zonish_wiped_clean_v2';
 
 class AcademyStore {
   constructor() {
     this.state = this.loadState();
-    if (!this.state || !this.state.students || this.state.students.length === 0) {
+    const wasWipedClean = localStorage.getItem(WIPED_FLAG_KEY) === 'true';
+
+    // Only load sample/demo data on the very first fresh launch.
+    // If the database was explicitly wiped clean, or if state already exists,
+    // NEVER re-inject sample data - keep it empty until user enters new data!
+    if (!this.state && !wasWipedClean) {
       this.initDefaultData();
+    } else if (!this.state && wasWipedClean) {
+      this.state = this.createEmptyState();
+      this.saveToLocalOnly();
+    } else {
+      this.ensureStateIntegrity();
     }
+  }
+
+  createEmptyState() {
+    return {
+      academyInfo: this.getDefaultAcademyInfo(),
+      courses: this.getDefaultCourses(),
+      students: [],
+      feePayments: [],
+      expenses: [],
+      profitSplit: this.getDefaultProfitSplit()
+    };
+  }
+
+  getDefaultAcademyInfo() {
+    return {
+      name: 'Zonish Computer Academy',
+      subtitle: 'Information Technology & Skill Training Center',
+      phone: '+92 300 1234567',
+      email: 'info@zonishacademy.com',
+      address: 'Main Boulevard, Education Complex, 2nd Floor',
+      currency: 'Rs.',
+      dueDay: 5
+    };
+  }
+
+  getDefaultCourses() {
+    return [
+      { id: 'c_cit', code: 'CIT', name: 'CIT (Certificate in IT)', durationMonths: 6, defaultFee: 2000, admissionFee: 1000 },
+      { id: 'c_dit', code: 'DIT', name: 'DIT (Diploma in IT)', durationMonths: 12, defaultFee: 2500, admissionFee: 1500 },
+      { id: 'c_oa', code: 'OA', name: 'Office Automation (MS Office & InPage)', durationMonths: 3, defaultFee: 1800, admissionFee: 800 },
+      { id: 'c_gd', code: 'GD', name: 'Graphic Designing & Multimedia', durationMonths: 3, defaultFee: 2500, admissionFee: 1000 },
+      { id: 'c_wd', code: 'WD', name: 'Web Development (Full Stack)', durationMonths: 6, defaultFee: 3500, admissionFee: 1500 }
+    ];
+  }
+
+  getDefaultProfitSplit() {
+    return {
+      customNetBalance: null,
+      splitType: 'percentage',
+      teacherPercent: 50,
+      adminPercent: 50,
+      teacherAmount: 0,
+      adminAmount: 0,
+      notes: '',
+      distributions: []
+    };
+  }
+
+  ensureStateIntegrity() {
+    if (!this.state) this.state = this.createEmptyState();
+    if (!Array.isArray(this.state.students)) this.state.students = [];
+    if (!Array.isArray(this.state.feePayments)) this.state.feePayments = [];
+    if (!Array.isArray(this.state.expenses)) this.state.expenses = [];
+    if (!Array.isArray(this.state.courses) || this.state.courses.length === 0) {
+      this.state.courses = this.getDefaultCourses();
+    }
+    if (!this.state.academyInfo) this.state.academyInfo = this.getDefaultAcademyInfo();
+    if (!this.state.profitSplit) this.state.profitSplit = this.getDefaultProfitSplit();
   }
 
   // Load from LocalStorage
@@ -42,25 +111,46 @@ class AcademyStore {
     }
   }
 
+  // Check if active database is empty
+  isDatabaseEmpty() {
+    const students = this.getStudents();
+    const fees = this.getFeePayments();
+    const expenses = this.getExpenses();
+    return students.length === 0 && fees.length === 0 && expenses.length === 0;
+  }
+
   // Apply state received from Firebase Cloud
   applyCloudState(cloudData, isRemoteUpdate = false) {
     if (!cloudData) return;
     this.state = {
-      academyInfo: cloudData.academyInfo || this.state.academyInfo,
-      courses: cloudData.courses || this.state.courses,
-      students: cloudData.students || this.state.students,
-      feePayments: cloudData.feePayments || this.state.feePayments,
-      expenses: cloudData.expenses || this.state.expenses,
-      profitSplit: cloudData.profitSplit || this.state.profitSplit
+      academyInfo: cloudData.academyInfo || this.state.academyInfo || this.getDefaultAcademyInfo(),
+      courses: Array.isArray(cloudData.courses) && cloudData.courses.length > 0 ? cloudData.courses : (this.state.courses || this.getDefaultCourses()),
+      students: Array.isArray(cloudData.students) ? cloudData.students : [],
+      feePayments: Array.isArray(cloudData.feePayments) ? cloudData.feePayments : [],
+      expenses: Array.isArray(cloudData.expenses) ? cloudData.expenses : [],
+      profitSplit: cloudData.profitSplit || this.getDefaultProfitSplit()
     };
+
+    if (cloudData.isWipedClean) {
+      localStorage.setItem(WIPED_FLAG_KEY, 'true');
+    } else if (this.state.students.length > 0) {
+      localStorage.removeItem(WIPED_FLAG_KEY);
+    }
+
     this.saveToLocalOnly();
 
     // Trigger UI updates across open tabs
+    this.notifyAllModules();
+
+    if (isRemoteUpdate && window.App) {
+      window.App.showToast('Live update received from other location via Firebase!', 'info');
+    }
+  }
+
+  notifyAllModules() {
     if (window.App) {
       window.App.refreshDashboard();
-      if (isRemoteUpdate) {
-        window.App.showToast('Live update received from other location via Firebase!', 'info');
-      }
+      if (window.App.renderSettings) window.App.renderSettings();
     }
     if (window.StudentsModule) window.StudentsModule.render();
     if (window.FeesModule) window.FeesModule.render();
@@ -70,6 +160,7 @@ class AcademyStore {
 
   // Initialize sample data for realistic immediate use
   initDefaultData() {
+    localStorage.removeItem(WIPED_FLAG_KEY);
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = String(today.getMonth() + 1).padStart(2, '0');
@@ -328,6 +419,7 @@ class AcademyStore {
   }
 
   addStudent(studentData) {
+    localStorage.removeItem(WIPED_FLAG_KEY);
     const newStudent = {
       ...studentData,
       id: studentData.id || this.generateStudentId(),
@@ -391,7 +483,7 @@ class AcademyStore {
       const monthDate = new Date(admDate.getFullYear(), admDate.getMonth() + i, 1);
       const ym = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
       const monthName = monthDate.toLocaleString('default', { month: 'short', year: 'numeric' });
-      
+
       const monthPayments = payments.filter(p => p.monthYear === ym);
       const paidAmount = monthPayments.reduce((sum, p) => sum + (Number(p.amountPaid) || 0), 0);
 
@@ -444,6 +536,7 @@ class AcademyStore {
   }
 
   recordFeePayment(paymentData) {
+    localStorage.removeItem(WIPED_FLAG_KEY);
     const student = this.getStudentById(paymentData.studentId);
     const newPayment = {
       id: `RCPT-${Date.now()}`,
@@ -477,6 +570,7 @@ class AcademyStore {
   }
 
   addExpense(expenseData) {
+    localStorage.removeItem(WIPED_FLAG_KEY);
     const newExpense = {
       id: `EXP-${Date.now()}`,
       date: expenseData.date || new Date().toISOString().split('T')[0],
@@ -826,30 +920,63 @@ class AcademyStore {
   }
 
   resetToDefault() {
+    localStorage.removeItem(WIPED_FLAG_KEY);
     this.initDefaultData();
+    this.notifyAllModules();
+  }
+
+  // Complete Wipe Out: Erases students, fee payments, expenses, and resets ledger.
+  // Sets WIPED_FLAG_KEY so that reload NEVER loads sample/demo data!
+  async wipeAllData(options = {}) {
+    const wipeCloud = options.wipeCloud !== false;
+    const statsBefore = {
+      studentsCount: (this.state.students || []).length,
+      feesCount: (this.state.feePayments || []).length,
+      expensesCount: (this.state.expenses || []).length
+    };
+
+    const keepCourses = options.resetCourses ? this.getDefaultCourses() : (this.state.courses || this.getDefaultCourses());
+    const keepInfo = options.resetInfo ? this.getDefaultAcademyInfo() : (this.state.academyInfo || this.getDefaultAcademyInfo());
+
+    this.state = {
+      academyInfo: keepInfo,
+      courses: keepCourses,
+      students: [],
+      feePayments: [],
+      expenses: [],
+      profitSplit: this.getDefaultProfitSplit()
+    };
+
+    // Set flag in localStorage so browser refreshes NEVER resurrect demo data
+    localStorage.setItem(WIPED_FLAG_KEY, 'true');
+    this.saveToLocalOnly();
+
+    let cloudResult = { attempted: false, success: false };
+
+    // If Firebase is connected and cloud wipe is enabled, wipe the remote Firestore doc
+    if (wipeCloud && window.FirebaseSync && window.FirebaseSync.isConnected) {
+      cloudResult.attempted = true;
+      try {
+        const res = await window.FirebaseSync.wipeCloudData();
+        cloudResult.success = res && res.success;
+        cloudResult.error = res && res.error;
+      } catch (err) {
+        cloudResult.success = false;
+        cloudResult.error = err.message;
+      }
+    }
+
+    this.notifyAllModules();
+
+    return {
+      success: true,
+      statsBefore,
+      cloudResult
+    };
   }
 
   clearAllData() {
-    this.state = {
-      academyInfo: {
-        name: 'Zonish Computer Academy',
-        subtitle: 'Information Technology & Skill Training Center',
-        phone: '',
-        email: '',
-        address: '',
-        currency: 'Rs.',
-        dueDay: 5
-      },
-      courses: [
-        { id: 'c_cit', code: 'CIT', name: 'CIT (Certificate in IT)', durationMonths: 6, defaultFee: 2000, admissionFee: 1000 },
-        { id: 'c_dit', code: 'DIT', name: 'DIT (Diploma in IT)', durationMonths: 12, defaultFee: 2500, admissionFee: 1500 },
-        { id: 'c_oa', code: 'OA', name: 'Office Automation', durationMonths: 3, defaultFee: 1800, admissionFee: 800 }
-      ],
-      students: [],
-      feePayments: [],
-      expenses: []
-    };
-    this.saveState();
+    return this.wipeAllData({ wipeCloud: true });
   }
 }
 

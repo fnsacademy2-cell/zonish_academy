@@ -1,0 +1,28 @@
+API Key *
+AIzaSyAbWWZIZJnlSoAvuyjafunvVGjxuXzjarg
+
+
+Project ID *
+zoni-ecf66
+
+
+Auth Domain*
+zoni-ecf66.firebaseapp.com
+
+Storage Bucket*
+zoni-ecf66.firebasestorage.app
+
+Messaging Sender ID*
+594487460917
+
+
+App ID*
+1:594487460917:web:ed391b385733b885749d7c
+
+
+
+
+
+
+
+
