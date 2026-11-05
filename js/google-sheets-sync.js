@@ -1,8 +1,8 @@
 /**
  * Zonish Academy - Google Sheets Cloud Synchronization Module
  * Connects the academy system to Google Sheets via Google Apps Script Web App.
- * Allows viewing records in Google Sheets, real-time sync across devices,
- * and automated cloud backup without Firebase.
+ * Features automated real-time background sync across multiple locations/devices
+ * without requiring manual "Download Latest" clicks.
  */
 
 const SHEETS_CONFIG_KEY = 'zonish_sheets_config_v1';
@@ -10,9 +10,13 @@ const SHEETS_CONFIG_KEY = 'zonish_sheets_config_v1';
 const GoogleSheetsSync = {
   webAppUrl: '',
   autoSync: true,
+  pollInterval: 15000, // 15 seconds default
+  lastCloudTimestamp: '',
+  pollTimer: null,
   isConnected: false,
   isSyncing: false,
   lastSynced: null,
+  listenersBound: false,
 
   init() {
     this.updateStatusBadge('checking', 'Checking Google Sheet...');
@@ -21,13 +25,45 @@ const GoogleSheetsSync = {
     if (savedConfig && savedConfig.webAppUrl) {
       this.webAppUrl = savedConfig.webAppUrl;
       this.autoSync = savedConfig.autoSync !== false;
+      this.pollInterval = savedConfig.pollInterval || 15000;
       this.lastSynced = savedConfig.lastSynced || null;
+      this.lastCloudTimestamp = savedConfig.lastCloudTimestamp || '';
       this.isConnected = true;
-      this.updateStatusBadge('online', 'Google Sheets Linked');
+      this.updateStatusBadge('online', 'Live Cloud Sync (Auto)');
+
+      // Immediately check and pull any new records from Google Sheets on startup
+      setTimeout(() => {
+        this.checkForRemoteUpdates(true);
+      }, 800);
+
+      // Start real-time background watcher across locations
+      if (this.autoSync) {
+        this.startAutoPolling();
+      }
     } else {
       this.isConnected = false;
       this.updateStatusBadge('offline', 'Local Storage Mode');
     }
+
+    this.bindWindowFocusListeners();
+  },
+
+  bindWindowFocusListeners() {
+    if (this.listenersBound) return;
+    this.listenersBound = true;
+
+    // When user switches back to this browser tab, check for updates immediately
+    window.addEventListener('focus', () => {
+      if (this.isConnected && this.autoSync && !this.isSyncing) {
+        this.checkForRemoteUpdates(true);
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && this.isConnected && this.autoSync && !this.isSyncing) {
+        this.checkForRemoteUpdates(true);
+      }
+    });
   },
 
   loadConfig() {
@@ -42,13 +78,18 @@ const GoogleSheetsSync = {
 
   saveConfig(config) {
     try {
-      this.webAppUrl = config.webAppUrl || '';
-      this.autoSync = config.autoSync !== false;
+      this.webAppUrl = config.webAppUrl !== undefined ? config.webAppUrl : this.webAppUrl;
+      this.autoSync = config.autoSync !== undefined ? config.autoSync : this.autoSync;
+      this.pollInterval = config.pollInterval || this.pollInterval;
       this.lastSynced = config.lastSynced || this.lastSynced;
+      this.lastCloudTimestamp = config.lastCloudTimestamp || this.lastCloudTimestamp;
+
       localStorage.setItem(SHEETS_CONFIG_KEY, JSON.stringify({
         webAppUrl: this.webAppUrl,
         autoSync: this.autoSync,
-        lastSynced: this.lastSynced
+        pollInterval: this.pollInterval,
+        lastSynced: this.lastSynced,
+        lastCloudTimestamp: this.lastCloudTimestamp
       }));
     } catch (e) {
       console.error('Error saving Google Sheets config:', e);
@@ -56,12 +97,36 @@ const GoogleSheetsSync = {
   },
 
   clearConfig() {
+    this.stopAutoPolling();
     localStorage.removeItem(SHEETS_CONFIG_KEY);
     this.webAppUrl = '';
     this.isConnected = false;
     this.isSyncing = false;
     this.lastSynced = null;
+    this.lastCloudTimestamp = '';
     this.updateStatusBadge('offline', 'Local Storage Mode (Disconnected)');
+  },
+
+  startAutoPolling() {
+    this.stopAutoPolling();
+    if (!this.isConnected || !this.webAppUrl || !this.autoSync) return;
+
+    this.pollTimer = setInterval(() => {
+      if (!this.isSyncing && this.isConnected && this.autoSync) {
+        // Do not interrupt user if a modal form is actively open
+        const hasOpenModal = document.querySelector('.modal-backdrop.open');
+        if (!hasOpenModal) {
+          this.checkForRemoteUpdates(true);
+        }
+      }
+    }, this.pollInterval);
+  },
+
+  stopAutoPolling() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
   },
 
   // Test the Google Apps Script Web App connection
@@ -73,8 +138,7 @@ const GoogleSheetsSync = {
 
     try {
       this.updateStatusBadge('syncing', 'Testing Connection...');
-      
-      // Send GET with action=test
+
       const testUrl = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 'action=test&t=' + Date.now();
       const response = await fetch(testUrl, {
         method: 'GET',
@@ -89,10 +153,14 @@ const GoogleSheetsSync = {
       if (result && result.status === 'success') {
         this.isConnected = true;
         this.webAppUrl = targetUrl;
-        this.saveConfig({ webAppUrl: targetUrl, autoSync: this.autoSync });
-        this.updateStatusBadge('online', 'Google Sheets Connected');
-        return { 
-          success: true, 
+        this.saveConfig({ webAppUrl: targetUrl, autoSync: this.autoSync, pollInterval: this.pollInterval });
+        this.updateStatusBadge('online', 'Live Cloud Sync (Auto)');
+
+        // Start background watcher
+        this.startAutoPolling();
+
+        return {
+          success: true,
           sheetName: result.sheetTitle || 'Google Sheet',
           sheetUrl: result.sheetUrl || ''
         };
@@ -103,6 +171,46 @@ const GoogleSheetsSync = {
       console.error('Google Sheets test failed:', err);
       this.updateStatusBadge('error', 'Connection Failed');
       return { success: false, error: err.message };
+    }
+  },
+
+  // Automated background check for updates from other locations
+  async checkForRemoteUpdates(silent = true) {
+    if (!this.isConnected || !this.webAppUrl || this.isSyncing) return;
+
+    try {
+      const checkUrl = this.webAppUrl + (this.webAppUrl.includes('?') ? '&' : '?') + 
+        'action=checkUpdate&lastTimestamp=' + encodeURIComponent(this.lastCloudTimestamp || '') +
+        '&t=' + Date.now();
+
+      const response = await fetch(checkUrl, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!response.ok) return;
+
+      const result = await response.json();
+
+      if (result && result.status === 'updated' && result.data) {
+        console.log('Automated live update detected from Google Sheets:', result.timestamp);
+        this.lastCloudTimestamp = result.timestamp || new Date().toISOString();
+        this.lastSynced = new Date().toLocaleTimeString();
+        this.saveConfig({ lastSynced: this.lastSynced, lastCloudTimestamp: this.lastCloudTimestamp });
+
+        // Apply updated cloud state across all modules
+        window.academyStore.applyCloudState(result.data, true);
+        this.updateStatusBadge('online', 'Live Cloud Synced');
+      } else if (result && result.status === 'unchanged') {
+        // Data is identical, no action needed
+        if (result.timestamp && !this.lastCloudTimestamp) {
+          this.lastCloudTimestamp = result.timestamp;
+          this.saveConfig({ lastCloudTimestamp: this.lastCloudTimestamp });
+        }
+      }
+    } catch (err) {
+      // Silent error during background poll so user is not annoyed if temporary offline
+      console.warn('Background auto-sync check notice:', err.message);
     }
   },
 
@@ -119,9 +227,10 @@ const GoogleSheetsSync = {
       this.isSyncing = true;
       this.updateStatusBadge('syncing', 'Syncing to Google Sheets...');
 
+      const newTimestamp = new Date().toISOString();
       const payload = {
         action: 'sync',
-        timestamp: new Date().toISOString(),
+        timestamp: newTimestamp,
         academyInfo: stateData.academyInfo || {},
         courses: stateData.courses || [],
         students: stateData.students || [],
@@ -131,7 +240,6 @@ const GoogleSheetsSync = {
         isWipedClean: false
       };
 
-      // Use text/plain to avoid CORS preflight options check on Google Apps Script
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
         headers: {
@@ -145,11 +253,17 @@ const GoogleSheetsSync = {
 
       if (result && result.status === 'success') {
         this.lastSynced = new Date().toLocaleTimeString();
-        this.saveConfig({ webAppUrl: this.webAppUrl, autoSync: this.autoSync, lastSynced: this.lastSynced });
-        this.updateStatusBadge('online', 'Synced with Google Sheets');
+        this.lastCloudTimestamp = newTimestamp;
+        this.saveConfig({
+          webAppUrl: this.webAppUrl,
+          autoSync: this.autoSync,
+          lastSynced: this.lastSynced,
+          lastCloudTimestamp: this.lastCloudTimestamp
+        });
+        this.updateStatusBadge('online', 'Live Cloud Sync (Auto)');
 
         if (showFeedback && window.App) {
-          window.App.showToast('All records synced to Google Sheets successfully!', 'success');
+          window.App.showToast('All records synced to Google Sheets in real-time!', 'success');
         }
         return { success: true };
       } else {
@@ -167,7 +281,7 @@ const GoogleSheetsSync = {
     }
   },
 
-  // Pull data from Google Sheets into local storage
+  // Pull data from Google Sheets manually
   async pullFromCloud(showFeedback = true) {
     if (!this.isConnected || !this.webAppUrl) {
       if (showFeedback && window.App) {
@@ -195,10 +309,17 @@ const GoogleSheetsSync = {
 
       if (result && result.status === 'success' && result.data) {
         const cloudData = result.data;
-        window.academyStore.applyCloudState(cloudData, false);
         this.lastSynced = new Date().toLocaleTimeString();
-        this.saveConfig({ webAppUrl: this.webAppUrl, autoSync: this.autoSync, lastSynced: this.lastSynced });
-        this.updateStatusBadge('online', 'Google Sheets Synced');
+        this.lastCloudTimestamp = result.timestamp || new Date().toISOString();
+        this.saveConfig({
+          webAppUrl: this.webAppUrl,
+          autoSync: this.autoSync,
+          lastSynced: this.lastSynced,
+          lastCloudTimestamp: this.lastCloudTimestamp
+        });
+
+        window.academyStore.applyCloudState(cloudData, false);
+        this.updateStatusBadge('online', 'Live Cloud Sync (Auto)');
 
         if (showFeedback && window.App) {
           window.App.showToast('Downloaded latest records from Google Sheets!', 'success');
@@ -251,6 +372,7 @@ const GoogleSheetsSync = {
       this.isSyncing = false;
 
       if (result && result.status === 'success') {
+        this.lastCloudTimestamp = payload.timestamp;
         this.updateStatusBadge('online', 'Google Sheet Wiped Clean');
         return { success: true };
       } else {
@@ -274,7 +396,7 @@ const GoogleSheetsSync = {
     if (status === 'online') {
       badge.classList.add('cloud-online');
       badge.innerHTML = `<span class="dot green"></span> <i class="fas fa-file-excel"></i> <span>${text}</span>`;
-      badge.title = 'Connected to Google Sheets. Live cloud sync active.';
+      badge.title = 'Real-time multi-location sync active with Google Sheets (Auto)';
     } else if (status === 'syncing') {
       badge.classList.add('cloud-syncing');
       badge.innerHTML = `<span class="dot yellow"></span> <i class="fas fa-sync fa-spin"></i> <span>${text}</span>`;
@@ -285,7 +407,7 @@ const GoogleSheetsSync = {
     } else {
       badge.classList.add('cloud-offline');
       badge.innerHTML = `<span class="dot gray"></span> <i class="fas fa-hdd"></i> <span>${text}</span>`;
-      badge.title = 'Running in local storage mode. Connect Google Sheets in Settings to sync.';
+      badge.title = 'Running in local storage mode. Connect Google Sheets in Settings to sync across locations.';
     }
   },
 
@@ -315,6 +437,46 @@ function doGet(e) {
     });
   }
 
+  // Real-time automated change detector across locations
+  if (action === 'checkUpdate') {
+    var lastTimestamp = (e && e.parameter && e.parameter.lastTimestamp) ? e.parameter.lastTimestamp : '';
+    var currentTimestamp = '';
+    try {
+      currentTimestamp = PropertiesService.getScriptProperties().getProperty('LAST_MODIFIED') || '';
+    } catch(err) {}
+
+    if (!currentTimestamp) {
+      var rawSheet = ss.getSheetByName('System_State');
+      if (rawSheet) {
+        currentTimestamp = String(rawSheet.getRange(1, 2).getValue() || '');
+      }
+    }
+
+    if (lastTimestamp && currentTimestamp && lastTimestamp === currentTimestamp) {
+      return createJsonResponse({
+        status: 'unchanged',
+        timestamp: currentTimestamp
+      });
+    }
+
+    var rawSheet = ss.getSheetByName('System_State');
+    if (!rawSheet) {
+      return createJsonResponse({ status: 'unchanged', message: 'No records yet' });
+    }
+
+    var jsonText = rawSheet.getRange(1, 1).getValue();
+    try {
+      var parsed = JSON.parse(jsonText);
+      return createJsonResponse({
+        status: 'updated',
+        timestamp: currentTimestamp || (parsed && parsed.timestamp) || new Date().toISOString(),
+        data: parsed
+      });
+    } catch (err) {
+      return createJsonResponse({ status: 'error', message: err.message });
+    }
+  }
+
   if (action === 'pull') {
     var rawSheet = ss.getSheetByName('System_State');
     if (!rawSheet) {
@@ -324,10 +486,12 @@ function doGet(e) {
       });
     }
     var jsonText = rawSheet.getRange(1, 1).getValue();
+    var currentTimestamp = String(rawSheet.getRange(1, 2).getValue() || new Date().toISOString());
     try {
       var parsed = JSON.parse(jsonText);
       return createJsonResponse({
         status: 'success',
+        timestamp: currentTimestamp,
         data: parsed
       });
     } catch (err) {
@@ -349,7 +513,8 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
     if (action === 'sync') {
-      writeStateBackup(ss, payload);
+      var timestamp = payload.timestamp || new Date().toISOString();
+      writeStateBackup(ss, payload, timestamp);
       writeStudentsSheet(ss, payload.students || []);
       writeFeesSheet(ss, payload.feePayments || []);
       writeExpensesSheet(ss, payload.expenses || []);
@@ -359,17 +524,18 @@ function doPost(e) {
       return createJsonResponse({
         status: 'success',
         message: 'All records updated in Google Sheet successfully!',
-        timestamp: new Date().toISOString()
+        timestamp: timestamp
       });
     }
 
     if (action === 'wipe') {
+      var timestamp = payload.timestamp || new Date().toISOString();
       clearAllSheets(ss);
-      writeStateBackup(ss, payload);
+      writeStateBackup(ss, payload, timestamp);
       return createJsonResponse({
         status: 'success',
         message: 'Google Sheet wiped clean successfully!',
-        timestamp: new Date().toISOString()
+        timestamp: timestamp
       });
     }
 
@@ -379,14 +545,19 @@ function doPost(e) {
   }
 }
 
-// Write the complete raw JSON backup to System_State tab
-function writeStateBackup(ss, payload) {
+// Write the complete raw JSON backup to System_State tab with timestamp
+function writeStateBackup(ss, payload, timestamp) {
   var sheet = ss.getSheetByName('System_State');
   if (!sheet) {
     sheet = ss.insertSheet('System_State');
   }
   sheet.clear();
   sheet.getRange(1, 1).setValue(JSON.stringify(payload));
+  sheet.getRange(1, 2).setValue(timestamp || new Date().toISOString());
+
+  try {
+    PropertiesService.getScriptProperties().setProperty('LAST_MODIFIED', timestamp || new Date().toISOString());
+  } catch(err) {}
 }
 
 // Populate Students Directory Tab
@@ -433,7 +604,7 @@ function writeFeesSheet(ss, feePayments) {
   sheet.clear();
 
   var headers = [
-    'Receipt #', 'Payment Date', 'Student Name', 'Roll #',
+    'Receipt #', 'Payment Date', 'Roll #', 'Student Name',
     'Course', 'Month Paid', 'Amount Paid (Rs)', 'Discount',
     'Payment Mode', 'Remarks'
   ];
@@ -444,8 +615,8 @@ function writeFeesSheet(ss, feePayments) {
     rows.push([
       f.receiptNo || '',
       f.paymentDate || '',
-      f.studentName || '',
       f.rollNo || '',
+      f.studentName || '',
       f.courseName || '',
       f.monthYear || '',
       f.amountPaid || 0,
@@ -600,4 +771,3 @@ function setupAllSheets() {
 };
 
 window.GoogleSheetsSync = GoogleSheetsSync;
-

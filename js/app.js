@@ -360,8 +360,10 @@ const App = {
         e.preventDefault();
         const urlInput = document.getElementById('sheets-webapp-url');
         const autoSyncInput = document.getElementById('sheets-auto-sync');
+        const pollIntervalInput = document.getElementById('sheets-poll-interval');
         const url = urlInput ? urlInput.value.trim() : '';
         const autoSync = autoSyncInput ? autoSyncInput.checked : true;
+        const pollInterval = pollIntervalInput ? parseInt(pollIntervalInput.value, 10) || 15000 : 15000;
 
         if (!url) {
           this.showToast('Please enter your Google Apps Script Web App URL.', 'warning');
@@ -377,7 +379,9 @@ const App = {
         const res = await window.GoogleSheetsSync.testConnection(url);
 
         if (res && res.success) {
-          window.GoogleSheetsSync.saveConfig({ webAppUrl: url, autoSync: autoSync });
+          window.GoogleSheetsSync.saveConfig({ webAppUrl: url, autoSync: autoSync, pollInterval: pollInterval });
+          window.GoogleSheetsSync.pollInterval = pollInterval;
+          window.GoogleSheetsSync.startAutoPolling();
           this.showToast(`Connected to "${res.sheetName || 'Google Sheet'}" successfully!`, 'success');
           
           // Prompt to push current local data if available
@@ -391,6 +395,20 @@ const App = {
         } else {
           this.showToast(`Connection failed: ${res.error || 'Check Web App URL and deployment access permissions'}`, 'danger');
         }
+      });
+    }
+
+    // Auto-sync polling interval changer
+    const pollIntervalSelect = document.getElementById('sheets-poll-interval');
+    if (pollIntervalSelect) {
+      pollIntervalSelect.addEventListener('change', () => {
+        const interval = parseInt(pollIntervalSelect.value, 10) || 15000;
+        window.GoogleSheetsSync.saveConfig({ pollInterval: interval });
+        window.GoogleSheetsSync.pollInterval = interval;
+        if (window.GoogleSheetsSync.isConnected) {
+          window.GoogleSheetsSync.startAutoPolling();
+        }
+        this.showToast(`Auto-update interval updated to ${interval / 1000} seconds`, 'info');
       });
     }
 
@@ -467,6 +485,7 @@ const App = {
 
     const urlEl = document.getElementById('sheets-webapp-url');
     const autoSyncEl = document.getElementById('sheets-auto-sync');
+    const pollIntervalEl = document.getElementById('sheets-poll-interval');
     const lastSyncedEl = document.getElementById('sheets-last-synced-text');
     const linkBoxEl = document.getElementById('sheets-connected-link-box');
     const directUrlEl = document.getElementById('sheets-direct-url');
@@ -475,6 +494,9 @@ const App = {
     if (savedSheetsConfig) {
       if (urlEl && !urlEl.value) urlEl.value = savedSheetsConfig.webAppUrl || '';
       if (autoSyncEl) autoSyncEl.checked = savedSheetsConfig.autoSync !== false;
+      if (pollIntervalEl && savedSheetsConfig.pollInterval) {
+        pollIntervalEl.value = String(savedSheetsConfig.pollInterval);
+      }
       if (lastSyncedEl && savedSheetsConfig.lastSynced) {
         lastSyncedEl.textContent = `Last Synced: ${savedSheetsConfig.lastSynced}`;
       }

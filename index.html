@@ -728,12 +728,23 @@
                       <span class="form-helper">Paste the Web App URL generated from your Google Sheet (Extensions -&gt; Apps Script -&gt; Deploy)</span>
                     </div>
 
-                    <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px;">
+                    <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px;">
                       <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600; margin: 0;">
                         <input type="checkbox" id="sheets-auto-sync" checked style="accent-color: var(--primary);">
-                        <span>Auto-sync changes to Google Sheets (when adding students, fees, or expenses)</span>
+                        <span>Auto-upload local changes (instant push on admissions, fee collection & expenses)</span>
                       </label>
-                      <div id="sheets-last-synced-text" style="font-size: 0.74rem; color: var(--text-muted); margin-top: 4px; margin-left: 22px;">
+                      <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px; margin-left: 22px; flex-wrap: wrap;">
+                        <label for="sheets-poll-interval" style="font-size: 0.8rem; font-weight: 600; color: var(--text); margin: 0;">
+                          <i class="fas fa-sync-alt" style="color: #10b981;"></i> Auto-receive updates from all users/locations:
+                        </label>
+                        <select id="sheets-poll-interval" class="form-control" style="width: auto; padding: 4px 8px; font-size: 0.8rem; height: 32px;">
+                          <option value="10000">Every 10 seconds (Live Fast)</option>
+                          <option value="15000" selected>Every 15 seconds (Recommended)</option>
+                          <option value="30000">Every 30 seconds</option>
+                          <option value="60000">Every 1 minute</option>
+                        </select>
+                      </div>
+                      <div id="sheets-last-synced-text" style="font-size: 0.74rem; color: var(--text-muted); margin-top: 8px; margin-left: 22px;">
                         Last Synced: Never
                       </div>
                     </div>
